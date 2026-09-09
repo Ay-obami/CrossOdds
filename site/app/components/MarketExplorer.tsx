@@ -23,7 +23,7 @@ export default function MarketExplorer() {
   const [mode, setMode] = useState<"live"|"demo"|"loading">("loading");
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_READOUT_API_URL;
+    const base = process.env.NEXT_PUBLIC_CROSSODDS_API_URL || process.env.NEXT_PUBLIC_READOUT_API_URL;
     if (!base) { setMode("demo"); return; }
     const root = base.replace(/\/$/, "");
     const controller = new AbortController();
@@ -49,7 +49,7 @@ export default function MarketExplorer() {
 
   const windows = snapshots.flatMap((snapshot) => (snapshot.windows || []).map((window) => ({ ...window, asset: snapshot.asset })));
   return <>
-    <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? "Live DreamDEX API" : mode === "loading" ? "Checking live Readout API…" : "Recorded DreamDEX fallback"}</div>
+    <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? "Live DreamDEX API" : mode === "loading" ? "Checking live CrossOdds API…" : "Recorded DreamDEX fallback"}</div>
     <div className="market-grid">{windows.map((row, i) => <article className="market-card" key={`${row.pool}-${i}`}>
       <div className="market-top"><span className="asset-badge">{row.asset}</span><span>{row.intervalMin} min</span></div>
       <strong>{row.impliedProbability == null ? "—" : `${Number(row.impliedProbability).toFixed(1)}%`}</strong>

@@ -49,25 +49,55 @@ const pct = (v?: number | null) => v == null ? "—" : `${(v * 100).toFixed(1)}%
 const rho = (v?: number | null) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
 
 export default function BasketBuilder() {
+  const base = process.env.NEXT_PUBLIC_CROSSODDS_API_URL || process.env.NEXT_PUBLIC_READOUT_API_URL;
+  const [assets, setAssets] = useState<string[]>(["BTC", "ETH"]);
+  const [assetA, setAssetA] = useState("BTC");
+  const [assetB, setAssetB] = useState("ETH");
   const [a, setA] = useState<Direction>("UP");
   const [b, setB] = useState<Direction>("UP");
   const [result, setResult] = useState<Result>(demo);
   const [mode, setMode] = useState<"live" | "demo" | "loading">("loading");
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_READOUT_API_URL;
+    if (!base) { setMode("demo"); return; }
+    const controller = new AbortController();
+    fetch(`${base.replace(/\/$/, "")}/api/assets`, { signal: controller.signal })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        const discovered = Array.isArray(data.assets)
+          ? [...new Set(data.assets.map((v: unknown) => String(v).toUpperCase()).filter(Boolean))]
+          : [];
+        if (discovered.length < 2) throw new Error("fewer than two live assets");
+        setAssets(discovered);
+        setAssetA((current) => discovered.includes(current) ? current : discovered[0]);
+        setAssetB((current) => {
+          if (discovered.includes(current) && current !== discovered[0]) return current;
+          return discovered.find((asset) => asset !== discovered[0]) || discovered[1];
+        });
+      })
+      .catch(() => { if (!controller.signal.aborted) setAssets(["BTC", "ETH"]); });
+    return () => controller.abort();
+  }, [base]);
+
+  useEffect(() => {
     if (!base) { setMode("demo"); setResult(demoForDirections(a,b)); return; }
+    if (!assetA || !assetB || assetA === assetB) {
+      setMode("live");
+      setResult({ status: "insufficient_data", note: "Choose two different live DreamDEX assets to build a correlation basket." });
+      return;
+    }
     const controller = new AbortController();
     setMode("loading");
     fetch(`${base.replace(/\/$/, "")}/api/basket/price`, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-      body: JSON.stringify({ legs: [{ asset: "BTC", direction: a }, { asset: "ETH", direction: b }] }),
+      body: JSON.stringify({ legs: [{ asset: assetA, direction: a }, { asset: assetB, direction: b }] }),
     }).then(async (r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json(); setResult(data); setMode("live");
     }).catch(() => { if (!controller.signal.aborted) { setResult(demoForDirections(a,b)); setMode("demo"); } });
     return () => controller.abort();
-  }, [a,b]);
+  }, [base, assetA, assetB, a, b]);
 
   const deltaLabel = useMemo(() => result.pricingDifference == null ? "—" : `${result.pricingDifference >= 0 ? "+" : ""}${(result.pricingDifference*100).toFixed(1)} pts`, [result]);
   const observed = result.rawCorrelation ?? result.correlation?.correlation ?? null;
@@ -75,12 +105,13 @@ export default function BasketBuilder() {
   const reliability = result.pricingReliability ?? result.correlation?.qualityScore ?? null;
   return (
     <div className="basket-shell">
-      <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? "Live DreamDEX data" : mode === "loading" ? "Checking live engine…" : "Deterministic demo dataset"}</div>
+      <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? `Live DreamDEX data · ${assets.length} assets discovered` : mode === "loading" ? "Checking live CrossOdds engine…" : "Deterministic demo dataset"}</div>
       <div className="leg-grid">
-        <Leg title="BTC" direction={a} onChange={setA} />
+        <Leg asset={assetA} assets={assets} blockedAsset={assetB} direction={a} onAssetChange={setAssetA} onDirectionChange={setA} />
         <div className="plus">+</div>
-        <Leg title="ETH" direction={b} onChange={setB} />
+        <Leg asset={assetB} assets={assets} blockedAsset={assetA} direction={b} onAssetChange={setAssetB} onDirectionChange={setB} />
       </div>
+      <p className="basket-source-note">Assets are discovered from live DreamDEX Event Contracts. CrossOdds prices two-leg baskets today and will automatically surface new supported assets as DreamDEX lists them.</p>
       {result.status === "ok" ? (
         <>
           <div className="compare-grid">
@@ -96,7 +127,7 @@ export default function BasketBuilder() {
             <div><span>Estimator</span><strong>{estimatorLabel(result.estimator || result.correlation?.estimator)}</strong></div>
             <div><span>Confidence</span><strong className="capitalize">{result.confidence || result.correlation?.confidence || "—"}</strong></div>
           </div>
-          <p className="plain-explain">{explanation(a,b,observed || 0,pricingRho || 0,result.pricingDifference || 0)}</p>
+          <p className="plain-explain">{explanation(assetA,assetB,a,b,observed || 0,pricingRho || 0,result.pricingDifference || 0)}</p>
           {mode === "live" && result.snapshot?.correlationSnapshotId ? <p className="snapshot-note">Snapshot {shortSnapshot(result.snapshot.correlationSnapshotId)} · priced {formatAge(result.snapshot.pricedAt)}</p> : null}
         </>
       ) : result.status === "independence_only" ? (
@@ -113,23 +144,22 @@ export default function BasketBuilder() {
   );
 }
 
-function Leg({ title, direction, onChange }: { title: string; direction: Direction; onChange: (d: Direction) => void }) {
-  return <div className="leg-card"><div className="asset-badge">{title}</div><div><div className="leg-title">{title} outcome</div><div className="leg-sub">DreamDEX Event Contract</div></div><div className="toggle"><button className={direction === "UP" ? "selected" : ""} onClick={() => onChange("UP")}>UP</button><button className={direction === "DOWN" ? "selected" : ""} onClick={() => onChange("DOWN")}>DOWN</button></div></div>;
+function Leg({ asset, assets, blockedAsset, direction, onAssetChange, onDirectionChange }: { asset: string; assets: string[]; blockedAsset: string; direction: Direction; onAssetChange: (asset: string) => void; onDirectionChange: (d: Direction) => void }) {
+  return <div className="leg-card"><div className="asset-badge">{asset.slice(0,6)}</div><div><div className="leg-title">{asset} outcome</div><div className="leg-sub">DreamDEX Event Contract</div></div><label className="asset-picker"><span>Asset</span><select className="asset-select" value={asset} onChange={(e) => onAssetChange(e.target.value)}>{assets.map((item) => <option key={item} value={item} disabled={item === blockedAsset}>{item}</option>)}</select></label><div className="toggle"><button className={direction === "UP" ? "selected" : ""} onClick={() => onDirectionChange("UP")}>UP</button><button className={direction === "DOWN" ? "selected" : ""} onClick={() => onDirectionChange("DOWN")}>DOWN</button></div></div>;
 }
 function Metric({ label, value, sub, emphasis = false }: { label: string; value: string; sub: string; emphasis?: boolean }) { return <div className={`metric ${emphasis ? "emphasis" : ""}`}><span>{label}</span><strong>{value}</strong><small>{sub}</small></div>; }
 function estimatorLabel(value?: string) { return value === "hayashi_yoshida" ? "Async HY" : value === "aligned_pearson" ? "Aligned Pearson" : "—"; }
 function demoForDirections(a: Direction,b: Direction): Result {
   const pA = a === "UP" ? .645 : .355; const pB = b === "UP" ? .581 : .419; const same = a === b;
   const independent = pA*pB; const raw = .68; const pricing = .5848; const signedPricing = same ? pricing : -pricing;
-  // Stable illustrative demo values only; live mode always uses the API's copula result.
   const delta = same ? .09 : -.055;
   return { ...demo, independentProbability: independent, adjustedProbability: Math.max(0, independent+delta), pricingDifference: delta, rawCorrelation: raw, pricingCorrelation: pricing, effectiveCorrelation: signedPricing };
 }
 function shortSnapshot(value: string) { return value.length > 32 ? `${value.slice(0, 14)}…${value.slice(-10)}` : value; }
 function formatAge(value?: number | null) { if (!value) return "now"; const seconds = Math.max(0, Math.round((Date.now()-value)/1000)); return seconds < 2 ? "now" : `${seconds}s ago`; }
-function explanation(a: Direction,b: Direction,raw: number,pricing: number,delta: number) {
+function explanation(assetA: string,assetB: string,a: Direction,b: Direction,raw: number,pricing: number,delta: number) {
   const relation = a === b ? "same-direction" : "opposing";
-  if (Math.abs(raw) < .15) return "Recent DreamDEX trading shows little relationship between these markets, so the adjusted basket stays close to independence.";
+  if (Math.abs(raw) < .15) return `Recent DreamDEX trading shows little relationship between ${assetA} and ${assetB}, so the adjusted basket stays close to independence.`;
   const sign = raw >= 0 ? "positively" : "negatively";
-  return `Observed BTC/ETH returns are ${sign} related (${rho(raw)}), but Readout shrinks that estimate to ${rho(pricing)} for pricing because live sample quality is limited. For this ${relation} basket, the risk-controlled adjustment ${delta >= 0 ? "raises" : "reduces"} the joint probability versus independence.`;
+  return `Observed ${assetA}/${assetB} returns are ${sign} related (${rho(raw)}), but CrossOdds shrinks that estimate to ${rho(pricing)} for pricing because live sample quality is limited. For this ${relation} basket, the risk-controlled adjustment ${delta >= 0 ? "raises" : "reduces"} the joint probability versus independence.`;
 }
