@@ -275,16 +275,16 @@ export default function BasketBuilder() {
         .basket-toolbar .mode-row { margin:0; }
         .matched-pill { padding:7px 10px; border:1px solid var(--rule); border-radius:999px; font:600 10px 'IBM Plex Mono',monospace; color:var(--ink-muted); background:#fafaf7; }
         .basket-pro .leg-grid { grid-template-columns:1fr 54px 1fr; gap:12px; }
-        .basket-pro .leg-card { padding:20px; grid-template-columns:52px 1fr; gap:14px 16px; border-radius:10px; border-color:#d4d8d2; background:#fff; }
+        .basket-pro .leg-card { padding:20px; grid-template-columns:52px minmax(0,1fr) auto; gap:14px 16px; border-radius:10px; border-color:#d4d8d2; background:#fff; }
         .basket-pro .asset-badge { width:52px; height:52px; border:0; border-radius:999px; background:#f2f4f1; box-shadow:inset 0 0 0 1px var(--rule); font:700 21px 'Sora',sans-serif; display:grid; place-items:center; }
         .basket-pro .asset-badge.btc { background:#fff4e5; color:#a85f00; box-shadow:inset 0 0 0 1px #edcf9f; }
         .basket-pro .asset-badge.eth { background:#eef1ff; color:#4055a8; box-shadow:inset 0 0 0 1px #ccd3f3; }
         .basket-pro .leg-title { font-size:17px; line-height:1.3; }
-        .leg-market-price { text-align:right; }
+        .leg-market-price { grid-column:3; grid-row:1; align-self:center; text-align:right; min-width:92px; }
         .leg-market-price span,.leg-market-price small { display:block; color:var(--ink-muted); }
         .leg-market-price strong { display:block; margin:1px 0; font:800 23px 'Sora',sans-serif; letter-spacing:-.03em; }
         .leg-market-price span { font:500 9px 'IBM Plex Mono',monospace; text-transform:uppercase; }
-        .leg-market-price small { font-size:10px; }
+        .leg-market-price small { font-size:10px; white-space:nowrap; }
         .selector-grid { grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
         .basket-pro .asset-picker { display:grid; gap:6px; }
         .basket-pro .asset-picker>span { color:var(--ink-muted); font:600 10px 'IBM Plex Mono',monospace; letter-spacing:.06em; text-transform:uppercase; }
@@ -349,6 +349,10 @@ export default function BasketBuilder() {
         @media(max-width:620px){
           .basket-pro { padding:18px; }
           .basket-toolbar { align-items:flex-start; flex-direction:column; }
+          .basket-pro .leg-card { grid-template-columns:46px minmax(0,1fr); }
+          .basket-pro .asset-badge { width:46px; height:46px; font-size:18px; }
+          .leg-market-price { grid-column:1/-1; grid-row:auto; text-align:left; min-width:0; padding-top:2px; }
+          .leg-market-price strong { font-size:21px; }
           .selector-grid,.answer-grid,.method-grid { grid-template-columns:1fr; }
           .answer-metric,.detail-cell { border-right:0; border-bottom:1px solid var(--rule); }
           .answer-metric:last-child { border-bottom:0; }
