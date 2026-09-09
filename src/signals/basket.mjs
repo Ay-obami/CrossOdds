@@ -15,8 +15,14 @@ async function resolveDependencies(deps) {
   return { getAssetSentiment, calculateAssetCorrelation };
 }
 
-function selectWindow(sentiment, correlation, side) {
+function selectWindow(sentiment, correlation, side, preferredWindowMin = null) {
   if (!Array.isArray(sentiment.windows) || !sentiment.windows.length) return null;
+
+  if (Number.isFinite(preferredWindowMin)) {
+    const requested = sentiment.windows.find((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
+    if (requested) return requested;
+  }
+
   const pool = side === "A" ? correlation?.marketPoolA : correlation?.marketPoolB;
   if (pool) {
     const exactPool = sentiment.windows.find((window) => window.pool?.toLowerCase() === pool.toLowerCase());
@@ -26,8 +32,6 @@ function selectWindow(sentiment, correlation, side) {
     const matchingWindow = sentiment.windows.find((window) => window.intervalMin === correlation.marketWindowMin);
     if (matchingWindow) return matchingWindow;
   }
-  // Prefer the shortest currently-priced horizon rather than blending unrelated
-  // 5m/15m/60m event probabilities into a synthetic marginal.
   return [...sentiment.windows].filter((w) => Number.isFinite(w.impliedProbabilityRaw)).sort((a, b) => a.intervalMin - b.intervalMin)[0] || null;
 }
 
@@ -37,22 +41,35 @@ function marginalProbability(sentiment, window) {
   return null;
 }
 
+function requestedWindow(legA, legB) {
+  const a = Number(legA?.intervalMin);
+  const b = Number(legB?.intervalMin);
+  const hasA = Number.isFinite(a) && a > 0;
+  const hasB = Number.isFinite(b) && b > 0;
+  if (!hasA && !hasB) return null;
+  if (!hasA || !hasB || a !== b) throw new Error("Basket legs must use the same event window for correlation pricing");
+  return a;
+}
+
 export async function priceBasket({ legs }, deps = {}) {
   if (!Array.isArray(legs) || legs.length !== 2) throw new Error("Basket MVP requires exactly two legs");
   const [legA, legB] = legs;
   if (!legA?.asset || !legB?.asset) throw new Error("Each basket leg requires an asset");
   if (legA.asset.toUpperCase() === legB.asset.toUpperCase()) throw new Error("Basket legs must use different assets in v1");
 
+  const preferredMarketWindowMin = requestedWindow(legA, legB);
   const resolved = await resolveDependencies(deps);
   const [sentimentA, sentimentB, correlation] = await Promise.all([
-    resolved.getAssetSentiment(legA.asset), resolved.getAssetSentiment(legB.asset), resolved.calculateAssetCorrelation(legA.asset, legB.asset),
+    resolved.getAssetSentiment(legA.asset),
+    resolved.getAssetSentiment(legB.asset),
+    resolved.calculateAssetCorrelation(legA.asset, legB.asset, { ...deps, preferredMarketWindowMin }),
   ]);
 
-  const windowA = selectWindow(sentimentA, correlation, "A");
-  const windowB = selectWindow(sentimentB, correlation, "B");
+  const windowA = selectWindow(sentimentA, correlation, "A", preferredMarketWindowMin);
+  const windowB = selectWindow(sentimentB, correlation, "B", preferredMarketWindowMin);
   const marginalA = marginalProbability(sentimentA, windowA);
   const marginalB = marginalProbability(sentimentB, windowB);
-  if (!marginalA || !marginalB) return { status: "insufficient_data", note: "both basket legs need at least one priced DreamDEX market", legs, sentimentA, sentimentB, correlation };
+  if (!marginalA || !marginalB) return { status: "insufficient_data", note: preferredMarketWindowMin ? `both basket legs need a priced ${preferredMarketWindowMin}m DreamDEX market` : "both basket legs need at least one priced DreamDEX market", legs, sentimentA, sentimentB, correlation };
 
   const directionA = (legA.direction || "UP").toUpperCase();
   const directionB = (legB.direction || "UP").toUpperCase();
@@ -67,9 +84,10 @@ export async function priceBasket({ legs }, deps = {}) {
       sentimentSnapshotB: sentimentB?.snapshotId ?? null,
       pricedAt: Date.now(),
     },
+    requestedMarketWindowMin: preferredMarketWindowMin,
     legs: [
-      { asset: legA.asset.toUpperCase(), direction: directionA, probability: pA, marginalSource: marginalA.source, intervalMin: marginalA.window?.intervalMin ?? null, pool: marginalA.window?.pool ?? null },
-      { asset: legB.asset.toUpperCase(), direction: directionB, probability: pB, marginalSource: marginalB.source, intervalMin: marginalB.window?.intervalMin ?? null, pool: marginalB.window?.pool ?? null },
+      { asset: legA.asset.toUpperCase(), direction: directionA, probability: pA, marginalSource: marginalA.source, intervalMin: marginalA.window?.intervalMin ?? null, pool: marginalA.window?.pool ?? null, secondsToExpiry: marginalA.window?.secondsToExpiry ?? null },
+      { asset: legB.asset.toUpperCase(), direction: directionB, probability: pB, marginalSource: marginalB.source, intervalMin: marginalB.window?.intervalMin ?? null, pool: marginalB.window?.pool ?? null, secondsToExpiry: marginalB.window?.secondsToExpiry ?? null },
     ],
     independentProbability,
     correlation,
