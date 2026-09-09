@@ -30,6 +30,30 @@ test("basket uses correlation-selected matching market window rather than blende
   assert.equal(result.legs[0].intervalMin, 15);
 });
 
+test("basket honors an explicitly requested shared event window", async () => {
+  let requestedWindow = null;
+  const result = await priceBasket({ legs: [{ asset: "BTC", direction: "UP", intervalMin: 60 }, { asset: "ETH", direction: "DOWN", intervalMin: 60 }] }, {
+    getAssetSentiment: async (asset) => asset === "BTC" ? btc : eth,
+    calculateAssetCorrelation: async (_assetA, _assetB, options) => {
+      requestedWindow = options.preferredMarketWindowMin;
+      return { status: "ok", correlation: 0.2, qualityScore: 0.5, confidence: "low", samples: 9, interval: "15m", marketWindowMin: 60, marketPoolA: "0xbtc60", marketPoolB: "0xeth60", estimator: "aligned_pearson" };
+    },
+  });
+  assert.equal(requestedWindow, 60);
+  assert.equal(result.requestedMarketWindowMin, 60);
+  assert.equal(result.legs[0].intervalMin, 60);
+  assert.equal(result.legs[1].intervalMin, 60);
+  assert.equal(result.legs[0].probability, 0.07);
+  assert.equal(result.legs[1].probability, 0.47);
+});
+
+test("basket rejects mismatched explicit event windows", async () => {
+  await assert.rejects(() => priceBasket({ legs: [{ asset: "BTC", direction: "UP", intervalMin: 5 }, { asset: "ETH", direction: "UP", intervalMin: 15 }] }, {
+    getAssetSentiment: async (asset) => asset === "BTC" ? btc : eth,
+    calculateAssetCorrelation: async () => ({ status: "ok", correlation: 0.2 }),
+  }), /same event window/);
+});
+
 test("basket returns independent price when correlation remains insufficient", async () => {
   const result = await priceBasket({ legs: [{ asset: "BTC", direction: "UP" }, { asset: "ETH", direction: "UP" }] }, {
     getAssetSentiment: async (asset) => asset === "BTC" ? btc : eth,
