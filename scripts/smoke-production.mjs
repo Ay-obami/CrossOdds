@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const [apiArg, siteArg, assetAArg = "BTC", assetBArg = "ETH"] = process.argv.slice(2);
-const API_URL = (apiArg || process.env.READOUT_API_URL || "").replace(/\/$/, "");
-const SITE_URL = (siteArg || process.env.READOUT_SITE_URL || "").replace(/\/$/, "");
+const API_URL = (apiArg || process.env.CROSSODDS_API_URL || process.env.READOUT_API_URL || "").replace(/\/$/, "");
+const SITE_URL = (siteArg || process.env.CROSSODDS_SITE_URL || process.env.READOUT_SITE_URL || "").replace(/\/$/, "");
 const assetA = assetAArg.toUpperCase();
 const assetB = assetBArg.toUpperCase();
 
@@ -21,14 +21,15 @@ async function getJson(url, options) {
   return { res, body };
 }
 
-console.log("=== READOUT PRODUCTION SMOKE TEST ===");
+console.log("=== CROSSODDS PRODUCTION SMOKE TEST ===");
 console.log(`API:  ${API_URL}`);
 console.log(`Site: ${SITE_URL}`);
 
 try {
   const { body, res } = await getJson(`${API_URL}/health`);
-  record("apiHealth", body?.ok === true && body?.service === "dreamdex-readout", `v${body?.version ?? "?"} mode=${body?.mode ?? "?"}`);
-  record("apiVersionHeader", Boolean(res.headers.get("x-readout-version")), res.headers.get("x-readout-version") || "missing");
+  record("apiHealth", body?.ok === true && ["crossodds", "dreamdex-readout"].includes(body?.service), `v${body?.version ?? "?"} mode=${body?.mode ?? "?"}`);
+  const versionHeader = res.headers.get("x-crossodds-version") || res.headers.get("x-readout-version");
+  record("apiVersionHeader", Boolean(versionHeader), versionHeader || "missing");
 } catch (e) { record("apiHealth", false, e.message); }
 
 try {
