@@ -1,4 +1,13 @@
 import SiteNav from "../components/SiteNav";
 import SiteFoot from "../components/SiteFoot";
 import BasketBuilder from "../components/BasketBuilder";
-export default function BasketPage(){return <><SiteNav active="basket"/><main className="wrap page-pad"><div className="eyebrow-plain">Basket builder</div><h1 className="page-title">Build a basket from live DreamDEX assets.</h1><p className="page-intro">Choose two different live Event Contract assets and a direction for each. CrossOdds compares independence with a correlation-adjusted joint probability and refuses to overstate sparse data.</p><BasketBuilder/><div className="method-note"><h3>What happens under the hood</h3><p>CrossOdds discovers the live assets, aligns candle history, converts closes into log returns, estimates return correlation, scores sample quality, shrinks noisy estimates toward independence, then uses a Gaussian copula to combine the risk-controlled relationship with each market&apos;s implied probability.</p></div></main><SiteFoot/></>}
+
+export default function BasketPage(){
+  return <><SiteNav active="basket"/><main className="wrap page-pad product-page">
+    <div className="eyebrow-plain">Basket builder</div>
+    <h1 className="page-title">What are two connected outcomes worth together?</h1>
+    <p className="page-intro">Choose two live DreamDEX assets, a shared Event Contract window, and an UP/DOWN outcome for each. CrossOdds shows the naive joint probability, the correlation-aware estimate, and why they differ.</p>
+    <BasketBuilder/>
+    <div className="method-note compact-method"><h3>Designed to avoid false precision</h3><p>CrossOdds correlates log returns, scores live data quality, shrinks noisy relationships toward independence, and withholds the adjustment entirely when the evidence is too weak.</p><a className="inline-link" href="/docs">Read the methodology →</a></div>
+  </main><SiteFoot/></>;
+}
