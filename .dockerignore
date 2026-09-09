@@ -1,0 +1,10 @@
+node_modules
+site/node_modules
+site/.next
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+*.zip
+npm-debug.log*

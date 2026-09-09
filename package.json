@@ -1,0 +1,28 @@
+{
+  "name": "dreamdex-readout",
+  "version": "0.7.0",
+  "type": "module",
+  "description": "Correlation-aware DreamDEX prediction baskets and MCP market intelligence",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test:candles": "node scripts/test-candles.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:correlation": "node --test test/correlation-engine.test.mjs",
+    "test:baskets": "node --test test/basket.test.mjs",
+    "check": "npm test",
+    "test:correlation:live": "node scripts/test-correlation.mjs",
+    "test:baskets:live": "node scripts/test-baskets.mjs",
+    "demo": "node scripts/demo-engine.mjs",
+    "api": "node src/api/http.mjs",
+    "inspect:markets": "node scripts/inspect-markets.mjs",
+    "test:api:live": "node scripts/test-api-live.mjs",
+    "smoke:production": "node scripts/smoke-production.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@somnia-chain/markets-sdk": "^0.28.1",
+    "viem": "^2.21.0",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  }
+}

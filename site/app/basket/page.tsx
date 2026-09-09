@@ -1,0 +1,4 @@
+import SiteNav from "../components/SiteNav";
+import SiteFoot from "../components/SiteFoot";
+import BasketBuilder from "../components/BasketBuilder";
+export default function BasketPage(){return <><SiteNav active="basket"/><main className="wrap page-pad"><div className="eyebrow-plain">Basket builder</div><h1 className="page-title">Does the crowd actually believe both?</h1><p className="page-intro">Choose a direction for each DreamDEX asset. Readout compares independence with a correlation-adjusted joint probability and refuses to overstate sparse data.</p><BasketBuilder/><div className="method-note"><h3>What happens under the hood</h3><p>Readout aligns candle history, converts closes into log returns, estimates return correlation, scores sample quality, shrinks noisy estimates toward independence, then uses a Gaussian copula to combine the risk-controlled relationship with each market&apos;s implied probability.</p></div></main><SiteFoot/></>}

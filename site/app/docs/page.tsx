@@ -1,0 +1,11 @@
+import SiteNav from "../components/SiteNav";
+import SiteFoot from "../components/SiteFoot";
+export default function Docs(){return <><SiteNav active="docs"/><main className="wrap page-pad docs"><div className="eyebrow-plain">Docs</div><h1 className="page-title">How Readout prices relationships</h1><p className="page-intro">Readout is a read-only intelligence layer over DreamDEX Event Contracts. It preserves the original sentiment/divergence tools and adds return correlation plus two-leg basket pricing.</p>
+<h2>1. Market inputs</h2><p>Live markets are discovered from Somnia MarketCreated logs. Order books provide marginal implied probabilities; the DreamDEX indexer provides OHLCV candles for historical relationship analysis.</p>
+<h2>2. Alignment</h2><p>The engine evaluates 5m, 15m, and 1h candle series. Candles are bucket-normalized, and a single missing bucket may be cautiously carried forward. Longer stale gaps are rejected.</p><div className="code-block">candidate intervals = [5m, 15m, 1h]<br/>max forward fill = 1 bucket</div>
+<h2>3. Returns, not raw prices</h2><div className="code-block">r(t) = ln(P(t) / P(t-1))<br/>rho = Pearson(returnsA, returnsB)</div><p>Correlating returns avoids treating two unrelated upward trends as evidence of a strong relationship.</p>
+<h2>4. Confidence gate</h2><p>Sample count, filled observations, trade count, and time span are combined into a quality score. Fewer than five aligned return observations are always insufficient.</p>
+<h2>5. Basket pricing</h2><p>The independent baseline is simply p(A) × p(B). The relationship-aware estimate uses a Gaussian copula with DreamDEX-implied marginal probabilities and the measured return correlation. Results are clamped to valid Fréchet bounds.</p>
+<h2>Run locally</h2><div className="code-block">npm install<br/>cp .env.example .env<br/>npm test<br/>npm run demo<br/>npm run test:correlation:live BTC ETH<br/>npm run api</div><div className="note-flag">The deterministic demo proves the engine without blockchain access. Live commands require a Shannon testnet key and reachable DreamDEX/Somnia endpoints.</div>
+<h2>Frontend live mode</h2><p>Set <span className="mono">NEXT_PUBLIC_READOUT_API_URL</span> in the site deployment to the HTTP API base URL. Without it, the basket UI clearly labels itself as a deterministic demo dataset.</p>
+</main><SiteFoot/></>}
