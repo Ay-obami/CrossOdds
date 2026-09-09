@@ -71,7 +71,10 @@ export async function calculateAssetCorrelation(assetA, assetB, deps = {}) {
   const aSymbol = assetA.toUpperCase();
   const bSymbol = assetB.toUpperCase();
   if (aSymbol === bSymbol) throw new Error("Correlation requires two different assets");
-  const cacheKey = `${aSymbol}:${bSymbol}`;
+
+  const requestedWindow = Number(deps.preferredMarketWindowMin);
+  const preferredMarketWindowMin = Number.isFinite(requestedWindow) && requestedWindow > 0 ? requestedWindow : null;
+  const cacheKey = `${aSymbol}:${bSymbol}:${preferredMarketWindowMin ?? "auto"}`;
   if (!deps.disableCache) {
     const cached = correlationCache.get(cacheKey);
     if (cached) return { ...cached.value, cache: { hit: true, cachedAt: cached.at, expiresAt: cached.expiresAt } };
@@ -81,10 +84,24 @@ export async function calculateAssetCorrelation(assetA, assetB, deps = {}) {
   const markets = await resolved.discoverLiveMarkets();
   const marketsA = markets.filter((market) => market.asset === aSymbol);
   const marketsB = markets.filter((market) => market.asset === bSymbol);
-  if (!marketsA.length || !marketsB.length) return { assetA: aSymbol, assetB: bSymbol, status: "insufficient_data", correlation: null, note: "both assets need at least one live DreamDEX market" };
+  if (!marketsA.length || !marketsB.length) return { assetA: aSymbol, assetB: bSymbol, status: "insufficient_data", correlation: null, requestedMarketWindowMin: preferredMarketWindowMin, note: "both assets need at least one live DreamDEX market" };
 
   let pairs = matchingWindowPairs(marketsA, marketsB);
-  if (!pairs.length) pairs = [{ a: [...marketsA].sort((x, y) => x.intervalSec - y.intervalSec)[0], b: [...marketsB].sort((x, y) => x.intervalSec - y.intervalSec)[0] }];
+  if (preferredMarketWindowMin !== null) {
+    pairs = pairs.filter((pair) => pair.a.intervalSec / 60 === preferredMarketWindowMin);
+    if (!pairs.length) {
+      return {
+        assetA: aSymbol,
+        assetB: bSymbol,
+        status: "insufficient_data",
+        correlation: null,
+        requestedMarketWindowMin: preferredMarketWindowMin,
+        note: `both assets need a live ${preferredMarketWindowMin}m DreamDEX market for matched-window pricing`,
+      };
+    }
+  } else if (!pairs.length) {
+    pairs = [{ a: [...marketsA].sort((x, y) => x.intervalSec - y.intervalSec)[0], b: [...marketsB].sort((x, y) => x.intervalSec - y.intervalSec)[0] }];
+  }
 
   const evaluations = [];
   for (const pair of pairs) {
@@ -95,7 +112,7 @@ export async function calculateAssetCorrelation(assetA, assetB, deps = {}) {
   }
 
   const valid = evaluations.filter((result) => result.correlation !== null && result.samples >= 5).sort((a, b) => resultRank(b) - resultRank(a));
-  if (!valid.length) return { assetA: aSymbol, assetB: bSymbol, status: "insufficient_data", correlation: null, note: "not enough synchronous or asynchronous candle returns to estimate correlation reliably", attempts: evaluations.map((r) => ({ interval: r.candleInterval, marketWindowMin: r.marketWindowMin, samples: r.samples, overlapPairs: r.overlapPairs, estimator: r.estimator, error: r.error })) };
+  if (!valid.length) return { assetA: aSymbol, assetB: bSymbol, status: "insufficient_data", correlation: null, requestedMarketWindowMin: preferredMarketWindowMin, note: "not enough synchronous or asynchronous candle returns to estimate correlation reliably", attempts: evaluations.map((r) => ({ interval: r.candleInterval, marketWindowMin: r.marketWindowMin, samples: r.samples, overlapPairs: r.overlapPairs, estimator: r.estimator, error: r.error })) };
 
   const best = valid[0];
   const computedAt = Date.now();
@@ -106,6 +123,7 @@ export async function calculateAssetCorrelation(assetA, assetB, deps = {}) {
     correlation: Math.round(best.correlation * 1000) / 1000,
     estimator: best.estimator,
     interval: best.candleInterval, marketWindowMin: best.marketWindowMin,
+    requestedMarketWindowMin: preferredMarketWindowMin,
     marketPoolA: best.marketA.pool, marketPoolB: best.marketB.pool,
     samples: best.samples, overlapPairs: best.overlapPairs, realSamples: best.realSamples, filledSamples: best.filledSamples,
     coverage: best.quality.coverage, confidence: best.quality.confidence, qualityScore: best.quality.score,
