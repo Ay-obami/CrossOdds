@@ -45,6 +45,7 @@ const demo: Result = {
   interval: "15m",
   estimator: "aligned_pearson",
 };
+
 const pct = (v?: number | null) => v == null ? "—" : `${(v * 100).toFixed(1)}%`;
 const rho = (v?: number | null) => v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
 
@@ -103,6 +104,7 @@ export default function BasketBuilder() {
   const observed = result.rawCorrelation ?? result.correlation?.correlation ?? null;
   const pricingRho = result.pricingCorrelation ?? null;
   const reliability = result.pricingReliability ?? result.correlation?.qualityScore ?? null;
+
   return (
     <div className="basket-shell">
       <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? `Live DreamDEX data · ${assets.length} assets discovered` : mode === "loading" ? "Checking live CrossOdds engine…" : "Deterministic demo dataset"}</div>
@@ -140,13 +142,133 @@ export default function BasketBuilder() {
           <div className="note-flag">{result.note}</div>
         </>
       ) : <div className="note-flag">{result.note || "Not enough DreamDEX data to price this basket reliably."}</div>}
+
+      <style jsx global>{`
+        .basket-shell .leg-card {
+          padding: 22px;
+          grid-template-columns: 52px 1fr;
+          gap: 14px 16px;
+          border-radius: 8px;
+        }
+        .basket-shell .asset-badge {
+          width: 52px;
+          height: 52px;
+          border: 0;
+          border-radius: 999px;
+          background: #f2f4f1;
+          box-shadow: inset 0 0 0 1px var(--rule);
+          font: 700 21px 'Sora', sans-serif;
+          letter-spacing: -0.04em;
+          color: var(--ink);
+          display: grid;
+          place-items: center;
+        }
+        .basket-shell .asset-badge.btc {
+          background: #fff4e5;
+          color: #a85f00;
+          box-shadow: inset 0 0 0 1px #edcf9f;
+        }
+        .basket-shell .asset-badge.eth {
+          background: #eef1ff;
+          color: #4055a8;
+          box-shadow: inset 0 0 0 1px #ccd3f3;
+        }
+        .basket-shell .leg-title {
+          font-size: 16px;
+          line-height: 1.35;
+        }
+        .basket-shell .asset-picker {
+          grid-column: 1 / -1;
+          display: grid;
+          gap: 7px;
+          margin-top: 2px;
+        }
+        .basket-shell .asset-picker > span {
+          color: var(--ink-muted);
+          font: 600 11px 'IBM Plex Mono', monospace;
+          letter-spacing: .06em;
+          text-transform: uppercase;
+        }
+        .basket-shell .select-wrap {
+          position: relative;
+        }
+        .basket-shell .select-wrap::after {
+          content: '';
+          position: absolute;
+          right: 15px;
+          top: 50%;
+          width: 7px;
+          height: 7px;
+          border-right: 1.5px solid var(--ink);
+          border-bottom: 1.5px solid var(--ink);
+          transform: translateY(-70%) rotate(45deg);
+          pointer-events: none;
+        }
+        .basket-shell .asset-select {
+          width: 100%;
+          appearance: none;
+          -webkit-appearance: none;
+          border: 1px solid var(--rule-strong);
+          background: #fff;
+          color: var(--ink);
+          border-radius: 6px;
+          padding: 11px 42px 11px 13px;
+          font: 600 14px 'IBM Plex Sans', sans-serif;
+          cursor: pointer;
+          outline: none;
+          transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .basket-shell .asset-select:hover {
+          border-color: #929891;
+          background: #fdfdfb;
+        }
+        .basket-shell .asset-select:focus {
+          border-color: var(--blue);
+          box-shadow: 0 0 0 3px var(--blue-tint);
+        }
+        .basket-shell .asset-select option:disabled {
+          color: #a1a6a1;
+        }
+        .basket-shell .toggle {
+          margin-top: 2px;
+          border-radius: 5px;
+          overflow: hidden;
+        }
+        .basket-shell .toggle button {
+          min-height: 40px;
+        }
+        .basket-shell .basket-source-note {
+          margin: 18px 0 0;
+          color: var(--ink-muted);
+          font-size: 13px;
+          line-height: 1.55;
+        }
+        @media (max-width: 560px) {
+          .basket-shell .leg-card { padding: 18px; }
+          .basket-shell .asset-badge { width: 46px; height: 46px; font-size: 18px; }
+        }
+      `}</style>
     </div>
   );
 }
 
 function Leg({ asset, assets, blockedAsset, direction, onAssetChange, onDirectionChange }: { asset: string; assets: string[]; blockedAsset: string; direction: Direction; onAssetChange: (asset: string) => void; onDirectionChange: (d: Direction) => void }) {
-  return <div className="leg-card"><div className="asset-badge">{asset.slice(0,6)}</div><div><div className="leg-title">{asset} outcome</div><div className="leg-sub">DreamDEX Event Contract</div></div><label className="asset-picker"><span>Asset</span><select className="asset-select" value={asset} onChange={(e) => onAssetChange(e.target.value)}>{assets.map((item) => <option key={item} value={item} disabled={item === blockedAsset}>{item}</option>)}</select></label><div className="toggle"><button className={direction === "UP" ? "selected" : ""} onClick={() => onDirectionChange("UP")}>UP</button><button className={direction === "DOWN" ? "selected" : ""} onClick={() => onDirectionChange("DOWN")}>DOWN</button></div></div>;
+  const key = asset.toLowerCase();
+  return <div className="leg-card">
+    <div className={`asset-badge ${key === "btc" ? "btc" : key === "eth" ? "eth" : ""}`} aria-hidden="true">{assetGlyph(asset)}</div>
+    <div><div className="leg-title">{asset} outcome</div><div className="leg-sub">DreamDEX Event Contract</div></div>
+    <label className="asset-picker"><span>Asset</span><div className="select-wrap"><select className="asset-select" value={asset} onChange={(e) => onAssetChange(e.target.value)} aria-label={`${asset} basket asset`}>{assets.map((item) => <option key={item} value={item} disabled={item === blockedAsset}>{item}</option>)}</select></div></label>
+    <div className="toggle"><button type="button" className={direction === "UP" ? "selected" : ""} onClick={() => onDirectionChange("UP")}>UP</button><button type="button" className={direction === "DOWN" ? "selected" : ""} onClick={() => onDirectionChange("DOWN")}>DOWN</button></div>
+  </div>;
 }
+
+function assetGlyph(asset: string) {
+  const key = asset.toUpperCase();
+  if (key === "BTC") return "₿";
+  if (key === "ETH") return "Ξ";
+  return key.slice(0, 2);
+}
+
 function Metric({ label, value, sub, emphasis = false }: { label: string; value: string; sub: string; emphasis?: boolean }) { return <div className={`metric ${emphasis ? "emphasis" : ""}`}><span>{label}</span><strong>{value}</strong><small>{sub}</small></div>; }
 function estimatorLabel(value?: string) { return value === "hayashi_yoshida" ? "Async HY" : value === "aligned_pearson" ? "Aligned Pearson" : "—"; }
 function demoForDirections(a: Direction,b: Direction): Result {
