@@ -64,16 +64,16 @@ export default function BasketBuilder() {
     fetch(`${base.replace(/\/$/, "")}/api/assets`, { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-        const discovered = Array.isArray(data.assets)
-          ? [...new Set(data.assets.map((v: unknown) => String(v).toUpperCase()).filter(Boolean))]
+        const data: { assets?: unknown[] } = await r.json();
+        const discovered: string[] = Array.isArray(data.assets)
+          ? Array.from(new Set(data.assets.map((v) => String(v).toUpperCase()).filter((v): v is string => v.length > 0)))
           : [];
         if (discovered.length < 2) throw new Error("fewer than two live assets");
         setAssets(discovered);
         setAssetA((current) => discovered.includes(current) ? current : discovered[0]);
         setAssetB((current) => {
           if (discovered.includes(current) && current !== discovered[0]) return current;
-          return discovered.find((asset) => asset !== discovered[0]) || discovered[1];
+          return discovered.find((asset) => asset !== discovered[0]) ?? discovered[1];
         });
       })
       .catch(() => { if (!controller.signal.aborted) setAssets(["BTC", "ETH"]); });
