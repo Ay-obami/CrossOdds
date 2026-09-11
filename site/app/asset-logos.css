@@ -1,0 +1,31 @@
+/* Canonical asset marks for supported DreamDEX assets. */
+.asset-badge.btc,
+.explorer-token.btc{
+  color:transparent!important;
+  font-size:0!important;
+  background-color:#F7931A!important;
+  background-image:url("https://cdn.simpleicons.org/bitcoin/FFFFFF")!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:58% 58%!important;
+  box-shadow:inset 0 0 0 1px rgba(144,78,0,.12)!important;
+}
+
+.asset-badge.eth,
+.explorer-token.eth{
+  color:transparent!important;
+  font-size:0!important;
+  background-color:#FFFFFF!important;
+  background-image:url("https://cdn.simpleicons.org/ethereum/627EEA")!important;
+  background-repeat:no-repeat!important;
+  background-position:center!important;
+  background-size:66% 66%!important;
+  box-shadow:inset 0 0 0 1px #D9DEF3!important;
+}
+
+.asset-badge.btc::selection,
+.asset-badge.eth::selection,
+.explorer-token.btc::selection,
+.explorer-token.eth::selection{
+  background:transparent;
+}
