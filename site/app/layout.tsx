@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./mobile.css";
+import "./asset-logos.css";
 
 export const metadata: Metadata = {
   title: "CrossOdds — correlated DreamDEX prediction baskets",
