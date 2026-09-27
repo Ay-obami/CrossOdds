@@ -198,3 +198,9 @@ After deployment, validate the public URLs with:
 ```bash
 npm run smoke:production -- https://YOUR-API-HOST https://YOUR-SITE.vercel.app
 ```
+
+## Explicit basket windows
+
+When basket legs request an `intervalMin`, both marginals must come from priced markets for that exact interval. Missing or unpriced requested windows return `insufficient_data`; aggregate sentiment and other intervals cannot substitute. If those marginals exist but correlation covers a different interval, the result is `independence_only` with a null adjusted probability. An independent estimate is not evidence that the two events are independent.
+
+Run the deterministic engine regression suite with `npm ci && npm test`. Live API and production smoke scripts remain separate because they depend on external market data.
