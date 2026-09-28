@@ -63,3 +63,37 @@ test("basket returns independent price when correlation remains insufficient", a
   assert.ok(Math.abs(result.independentProbability - 0.72 * 0.64) < 1e-12);
   assert.equal(result.adjustedProbability, null);
 });
+
+for (const missing of ['BTC', 'ETH', 'both', 'aggregate-only', 'unpriced']) {
+  test(`explicit window refuses unavailable marginals (${missing})`, async () => {
+    const result = await priceBasket({ legs: [
+      { asset: 'BTC', intervalMin: 60 }, { asset: 'ETH', intervalMin: 60 },
+    ] }, {
+      getAssetSentiment: async (asset) => {
+        const source = asset === 'BTC' ? btc : eth;
+        if (missing === 'aggregate-only') return { asset, probability: 0.5 };
+        if (missing === 'unpriced') return { ...source, windows: source.windows.map(w => w.intervalMin === 60 ? { ...w, impliedProbabilityRaw: null } : w) };
+        return missing === 'both' || missing === asset
+          ? { ...source, windows: source.windows.filter(w => w.intervalMin !== 60) }
+          : source;
+      },
+      calculateAssetCorrelation: async () => ({ status: 'ok', correlation: 0.4, marketWindowMin: 5, marketPoolA: '0xbtc5', marketPoolB: '0xeth5' }),
+    });
+    assert.equal(result.status, 'insufficient_data');
+    assert.equal(result.adjustedProbability, undefined);
+    assert.equal(result.independentProbability, undefined);
+  });
+}
+
+test('explicit window withholds adjustment from a different correlation window', async () => {
+  const result = await priceBasket({ legs: [
+    { asset: 'BTC', intervalMin: 60 }, { asset: 'ETH', intervalMin: 60 },
+  ] }, {
+    getAssetSentiment: async asset => asset === 'BTC' ? btc : eth,
+    calculateAssetCorrelation: async () => ({ status: 'ok', correlation: 0.8, qualityScore: 1, confidence: 'high', marketWindowMin: 5, marketPoolA: '0xbtc5', marketPoolB: '0xeth5' }),
+  });
+  assert.equal(result.status, 'independence_only');
+  assert.equal(result.adjustedProbability, null);
+  assert.deepEqual(result.legs.map(leg => leg.intervalMin), [60, 60]);
+  assert.ok(Math.abs(result.independentProbability - 0.0371) < 1e-12);
+});

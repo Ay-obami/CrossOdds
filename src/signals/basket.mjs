@@ -20,7 +20,7 @@ function selectWindow(sentiment, correlation, side, preferredWindowMin = null) {
 
   if (Number.isFinite(preferredWindowMin)) {
     const requested = sentiment.windows.find((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
-    if (requested) return requested;
+    return requested || null;
   }
 
   const pool = side === "A" ? correlation?.marketPoolA : correlation?.marketPoolB;
@@ -67,8 +67,10 @@ export async function priceBasket({ legs }, deps = {}) {
 
   const windowA = selectWindow(sentimentA, correlation, "A", preferredMarketWindowMin);
   const windowB = selectWindow(sentimentB, correlation, "B", preferredMarketWindowMin);
-  const marginalA = marginalProbability(sentimentA, windowA);
-  const marginalB = marginalProbability(sentimentB, windowB);
+  // An explicit event window is a contract with the caller, not a preference.
+  // Never fall back to unrelated windows or aggregate asset sentiment.
+  const marginalA = preferredMarketWindowMin && !windowA ? null : marginalProbability(sentimentA, windowA);
+  const marginalB = preferredMarketWindowMin && !windowB ? null : marginalProbability(sentimentB, windowB);
   if (!marginalA || !marginalB) return { status: "insufficient_data", note: preferredMarketWindowMin ? `both basket legs need a priced ${preferredMarketWindowMin}m DreamDEX market` : "both basket legs need at least one priced DreamDEX market", legs, sentimentA, sentimentB, correlation };
 
   const directionA = (legA.direction || "UP").toUpperCase();
@@ -93,10 +95,14 @@ export async function priceBasket({ legs }, deps = {}) {
     correlation,
   };
 
-  if (correlation.status !== "ok" || correlation.correlation === null) {
+  const correlationWindowMismatch = preferredMarketWindowMin !== null
+    && correlation.marketWindowMin !== preferredMarketWindowMin;
+  if (correlation.status !== "ok" || correlation.correlation === null || correlationWindowMismatch) {
     return {
       status: "independence_only",
-      note: "DreamDEX prices are usable, but current candle history is too asynchronous/sparse for a defensible correlation adjustment",
+      note: correlationWindowMismatch
+        ? "Requested market prices are usable, but correlation does not cover the requested event window"
+        : "DreamDEX prices are usable, but current candle history is too asynchronous/sparse for a defensible correlation adjustment",
       ...base,
       adjustedProbability: null,
       pricingDifference: null,
