@@ -18,12 +18,14 @@ async function resolveDependencies(deps) {
 function selectWindow(sentiment, correlation, side, preferredWindowMin = null) {
   if (!Array.isArray(sentiment.windows) || !sentiment.windows.length) return null;
 
+  const pool = side === "A" ? correlation?.marketPoolA : correlation?.marketPoolB;
+
   if (Number.isFinite(preferredWindowMin)) {
-    const requested = sentiment.windows.find((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
+    const matching = sentiment.windows.filter((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
+    const requested = matching.find((window) => pool && window.pool?.toLowerCase() === pool.toLowerCase()) || matching[0];
     return requested || null;
   }
 
-  const pool = side === "A" ? correlation?.marketPoolA : correlation?.marketPoolB;
   if (pool) {
     const exactPool = sentiment.windows.find((window) => window.pool?.toLowerCase() === pool.toLowerCase());
     if (exactPool) return exactPool;
@@ -97,12 +99,18 @@ export async function priceBasket({ legs }, deps = {}) {
 
   const correlationWindowMismatch = preferredMarketWindowMin !== null
     && correlation.marketWindowMin !== preferredMarketWindowMin;
-  if (correlation.status !== "ok" || correlation.correlation === null || correlationWindowMismatch) {
+  const correlationPoolMismatch = [
+    [correlation.marketPoolA, marginalA.window?.pool],
+    [correlation.marketPoolB, marginalB.window?.pool],
+  ].some(([correlationPool, pricedPool]) => correlationPool && pricedPool && correlationPool.toLowerCase() !== pricedPool.toLowerCase());
+  if (correlation.status !== "ok" || correlation.correlation === null || correlationWindowMismatch || correlationPoolMismatch) {
     return {
       status: "independence_only",
       note: correlationWindowMismatch
         ? "Requested market prices are usable, but correlation does not cover the requested event window"
-        : "DreamDEX prices are usable, but current candle history is too asynchronous/sparse for a defensible correlation adjustment",
+        : correlationPoolMismatch
+          ? "Market prices are usable, but correlation was measured from a different market pool"
+          : "DreamDEX prices are usable, but current candle history is too asynchronous/sparse for a defensible correlation adjustment",
       ...base,
       adjustedProbability: null,
       pricingDifference: null,

@@ -97,3 +97,28 @@ test('explicit window withholds adjustment from a different correlation window',
   assert.deepEqual(result.legs.map(leg => leg.intervalMin), [60, 60]);
   assert.ok(Math.abs(result.independentProbability - 0.0371) < 1e-12);
 });
+
+test('explicit window never applies correlation from different pools at the same interval', async () => {
+  const result = await priceBasket({ legs: [
+    { asset: 'BTC', intervalMin: 60 }, { asset: 'ETH', intervalMin: 60 },
+  ] }, {
+    getAssetSentiment: async asset => asset === 'BTC' ? {
+      ...btc, windows: [{ ...btc.windows[2], pool: '0xbtc-current', impliedProbabilityRaw: 0.8 }, { ...btc.windows[2], pool: '0xbtc-old', impliedProbabilityRaw: 0.1 }],
+    } : eth,
+    calculateAssetCorrelation: async () => ({ status: 'ok', correlation: 0.8, qualityScore: 1, confidence: 'high', marketWindowMin: 60, marketPoolA: '0xbtc-old', marketPoolB: '0xeth60' }),
+  });
+  assert.equal(result.legs[0].pool, '0xbtc-old');
+  assert.equal(result.legs[0].probability, 0.1);
+  assert.equal(result.status, 'ok');
+});
+
+test('correlation is withheld if its pool is absent from the priced sentiment snapshot', async () => {
+  const result = await priceBasket({ legs: [
+    { asset: 'BTC', intervalMin: 60 }, { asset: 'ETH', intervalMin: 60 },
+  ] }, {
+    getAssetSentiment: async asset => asset === 'BTC' ? btc : eth,
+    calculateAssetCorrelation: async () => ({ status: 'ok', correlation: 0.8, qualityScore: 1, confidence: 'high', marketWindowMin: 60, marketPoolA: '0xbtc-old', marketPoolB: '0xeth60' }),
+  });
+  assert.equal(result.status, 'independence_only');
+  assert.equal(result.adjustedProbability, null);
+});
