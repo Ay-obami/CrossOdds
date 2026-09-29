@@ -15,30 +15,32 @@ async function resolveDependencies(deps) {
   return { getAssetSentiment, calculateAssetCorrelation };
 }
 
-function selectWindow(sentiment, correlation, side, preferredWindowMin = null) {
+function selectWindow(sentiment, correlation, side, preferredWindowMin = null, nowSec = Math.floor(Date.now() / 1000)) {
   if (!Array.isArray(sentiment.windows) || !sentiment.windows.length) return null;
+  const live = sentiment.windows.filter((window) => window.expiry == null || window.expiry > nowSec);
 
   const pool = side === "A" ? correlation?.marketPoolA : correlation?.marketPoolB;
 
   if (Number.isFinite(preferredWindowMin)) {
-    const matching = sentiment.windows.filter((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
+    const matching = live.filter((window) => window.intervalMin === preferredWindowMin && Number.isFinite(window.impliedProbabilityRaw));
     const requested = matching.find((window) => pool && window.pool?.toLowerCase() === pool.toLowerCase()) || matching[0];
     return requested || null;
   }
 
   if (pool) {
-    const exactPool = sentiment.windows.find((window) => window.pool?.toLowerCase() === pool.toLowerCase());
+    const exactPool = live.find((window) => window.pool?.toLowerCase() === pool.toLowerCase());
     if (exactPool) return exactPool;
   }
   if (Number.isFinite(correlation?.marketWindowMin)) {
-    const matchingWindow = sentiment.windows.find((window) => window.intervalMin === correlation.marketWindowMin);
+    const matchingWindow = live.find((window) => window.intervalMin === correlation.marketWindowMin);
     if (matchingWindow) return matchingWindow;
   }
-  return [...sentiment.windows].filter((w) => Number.isFinite(w.impliedProbabilityRaw)).sort((a, b) => a.intervalMin - b.intervalMin)[0] || null;
+  return live.filter((w) => Number.isFinite(w.impliedProbabilityRaw)).sort((a, b) => a.intervalMin - b.intervalMin)[0] || null;
 }
 
 function marginalProbability(sentiment, window) {
   if (Number.isFinite(window?.impliedProbabilityRaw)) return { probability: window.impliedProbabilityRaw, source: "matched_market_window", window };
+  if (Array.isArray(sentiment.windows) && sentiment.windows.length) return null;
   if (Number.isFinite(sentiment.probability)) return { probability: sentiment.probability, source: `asset_${sentiment.weighting || "aggregate"}`, window: null };
   return null;
 }
@@ -67,8 +69,9 @@ export async function priceBasket({ legs }, deps = {}) {
     resolved.calculateAssetCorrelation(legA.asset, legB.asset, { ...deps, preferredMarketWindowMin }),
   ]);
 
-  const windowA = selectWindow(sentimentA, correlation, "A", preferredMarketWindowMin);
-  const windowB = selectWindow(sentimentB, correlation, "B", preferredMarketWindowMin);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const windowA = selectWindow(sentimentA, correlation, "A", preferredMarketWindowMin, nowSec);
+  const windowB = selectWindow(sentimentB, correlation, "B", preferredMarketWindowMin, nowSec);
   // An explicit event window is a contract with the caller, not a preference.
   // Never fall back to unrelated windows or aggregate asset sentiment.
   const marginalA = preferredMarketWindowMin && !windowA ? null : marginalProbability(sentimentA, windowA);
@@ -90,8 +93,8 @@ export async function priceBasket({ legs }, deps = {}) {
     },
     requestedMarketWindowMin: preferredMarketWindowMin,
     legs: [
-      { asset: legA.asset.toUpperCase(), direction: directionA, probability: pA, marginalSource: marginalA.source, intervalMin: marginalA.window?.intervalMin ?? null, pool: marginalA.window?.pool ?? null, secondsToExpiry: marginalA.window?.secondsToExpiry ?? null },
-      { asset: legB.asset.toUpperCase(), direction: directionB, probability: pB, marginalSource: marginalB.source, intervalMin: marginalB.window?.intervalMin ?? null, pool: marginalB.window?.pool ?? null, secondsToExpiry: marginalB.window?.secondsToExpiry ?? null },
+      { asset: legA.asset.toUpperCase(), direction: directionA, probability: pA, marginalSource: marginalA.source, intervalMin: marginalA.window?.intervalMin ?? null, pool: marginalA.window?.pool ?? null, secondsToExpiry: marginalA.window?.expiry == null ? marginalA.window?.secondsToExpiry ?? null : marginalA.window.expiry - nowSec },
+      { asset: legB.asset.toUpperCase(), direction: directionB, probability: pB, marginalSource: marginalB.source, intervalMin: marginalB.window?.intervalMin ?? null, pool: marginalB.window?.pool ?? null, secondsToExpiry: marginalB.window?.expiry == null ? marginalB.window?.secondsToExpiry ?? null : marginalB.window.expiry - nowSec },
     ],
     independentProbability,
     correlation,
