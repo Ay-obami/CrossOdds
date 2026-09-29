@@ -17,3 +17,5 @@ Production check:
 npm run build
 npm start
 ```
+
+The pull-request workflow runs this clean-install production build on Node 22 alongside the engine tests. The build requires no API URL; without one, the UI uses the documented demo fallback.
