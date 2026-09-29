@@ -203,4 +203,6 @@ npm run smoke:production -- https://YOUR-API-HOST https://YOUR-SITE.vercel.app
 
 When basket legs request an `intervalMin`, both marginals must come from priced markets for that exact interval. Missing or unpriced requested windows return `insufficient_data`; aggregate sentiment and other intervals cannot substitute. If those marginals exist but correlation covers a different interval, the result is `independence_only` with a null adjusted probability. An independent estimate is not evidence that the two events are independent.
 
+When several pools share that interval, the basket selects the correlation snapshot's pool when it is still priced. If a snapshot pool is no longer present among the priced markets, the basket reports the independent estimate and withholds the correlation adjustment. Matching interval alone does not establish matching event identity.
+
 Run the deterministic engine regression suite with `npm ci && npm test`. Live API and production smoke scripts remain separate because they depend on external market data.
