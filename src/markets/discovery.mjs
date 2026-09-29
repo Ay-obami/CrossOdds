@@ -1,5 +1,6 @@
 import { marketCreatorEventsAbi } from "../../node_modules/@somnia-chain/markets-sdk/dist/eventsAbi.js";
 import { pub, COLLATERAL } from "../client.mjs";
+import { liveMarketsAt } from "./freshness.mjs";
 
 const marketCreated = marketCreatorEventsAbi.find((event) => event.name === "MarketCreated");
 let cache = { at: 0, markets: [] };
@@ -10,7 +11,7 @@ export function clearDiscoveryCache() {
 }
 
 export async function discoverLiveMarkets() {
-  if (Date.now() - cache.at < CACHE_MS) return cache.markets;
+  if (Date.now() - cache.at < CACHE_MS) return liveMarketsAt(cache.markets);
 
   const now = Math.floor(Date.now() / 1000);
   const head = await pub.getBlockNumber();
@@ -28,7 +29,7 @@ export async function discoverLiveMarkets() {
     }
   }
 
-  const live = found
+  const eligible = found
     .filter((market) => Number(market.expiry) > now && market.collateral?.toLowerCase() === COLLATERAL.toLowerCase())
     .map((market) => ({
       asset: market.asset,
@@ -40,6 +41,7 @@ export async function discoverLiveMarkets() {
     }))
     .sort((a, b) => a.intervalSec - b.intervalSec);
 
+  const live = liveMarketsAt(eligible);
   cache = { at: Date.now(), markets: live };
   if (!live.length && failures.length === 40) {
     const error = new Error("DreamDEX market discovery failed for every scanned block range");

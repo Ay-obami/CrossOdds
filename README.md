@@ -205,4 +205,6 @@ When basket legs request an `intervalMin`, both marginals must come from priced 
 
 When several pools share that interval, the basket selects the correlation snapshot's pool when it is still priced. If a snapshot pool is no longer present among the priced markets, the basket reports the independent estimate and withholds the correlation adjustment. Matching interval alone does not establish matching event identity.
 
+Discovery and sentiment snapshots have short cache TTLs, but an event can expire during either TTL. Cached responses recalculate time remaining and discard expired pools; sentiment is recomputed when a constituent market expires. The basket checks expiry again before using a marginal, returning `insufficient_data` if a requested market has expired. This addresses event expiry; it does not establish that an indexer or order book is up to date before expiry.
+
 Run the deterministic engine regression suite with `npm ci && npm test`. Live API and production smoke scripts remain separate because they depend on external market data.

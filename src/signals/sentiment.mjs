@@ -1,11 +1,16 @@
-import { discoverLiveMarkets } from "../markets/discovery.mjs";
-import { readBook } from "../markets/orderbook.mjs";
+import { liveMarketsAt } from "../markets/freshness.mjs";
 import { TtlCache, makeSnapshotId } from "../cache/ttl.mjs";
 
 export const SENTIMENT_CACHE_MS = 10_000;
 const sentimentCache = new TtlCache(SENTIMENT_CACHE_MS);
 
 export function clearSentimentCache() { sentimentCache.clear(); }
+
+async function resolveDependencies(options) {
+  const discoverLiveMarkets = options.discoverLiveMarkets || (await import("../markets/discovery.mjs")).discoverLiveMarkets;
+  const readBook = options.readBook || (await import("../markets/orderbook.mjs")).readBook;
+  return { discoverLiveMarkets, readBook };
+}
 
 function marketWeight(book) {
   if (Number.isFinite(book.depth) && book.depth > 0) return { weight: book.depth, weightSource: "depth" };
@@ -18,17 +23,27 @@ function marketWeight(book) {
 
 export async function getAssetSentiment(asset, options = {}) {
   const symbol = asset.toUpperCase();
+  const now = options.now || Date.now;
   if (!options.disableCache) {
-    const cached = sentimentCache.get(symbol);
-    if (cached) return { ...cached.value, cache: { hit: true, cachedAt: cached.at, expiresAt: cached.expiresAt } };
+    const cached = sentimentCache.get(symbol, now());
+    if (cached) {
+      const windows = liveMarketsAt(cached.value.windows, Math.floor(now() / 1000));
+      if (windows.length === cached.value.windows.length) {
+        return { ...cached.value, windows, cache: { hit: true, cachedAt: cached.at, expiresAt: cached.expiresAt } };
+      }
+      sentimentCache.clear(symbol);
+    }
   }
-  const markets = (await discoverLiveMarkets()).filter((market) => market.asset === symbol);
+  const deps = await resolveDependencies(options);
+  const markets = liveMarketsAt((await deps.discoverLiveMarkets()).filter((market) => market.asset === symbol), Math.floor(now() / 1000));
   if (!markets.length) return { asset: symbol, markets: 0, sentiment: null, note: "no live markets for this asset" };
 
-  const books = await Promise.all(markets.map((market) => readBook(market.pool)));
+  const books = await Promise.all(markets.map((market) => deps.readBook(market.pool)));
+  const observedAt = now();
+  const livePools = new Set(liveMarketsAt(markets, Math.floor(observedAt / 1000)).map((market) => market.pool));
   const priced = books
     .map((book, index) => ({ ...book, market: markets[index], ...marketWeight(book) }))
-    .filter((book) => Number.isFinite(book.impliedProbability));
+    .filter((book) => livePools.has(book.market.pool) && Number.isFinite(book.impliedProbability));
 
   if (!priced.length) return { asset: symbol, markets: markets.length, sentiment: null, note: "no priced order books yet" };
 
@@ -38,7 +53,6 @@ export async function getAssetSentiment(asset, options = {}) {
   const totalDepth = finiteDepths.length ? finiteDepths.reduce((sum, depth) => sum + depth, 0) : null;
   const weighting = priced.every((book) => book.weightSource === "depth") ? "depth" : priced.some((book) => book.weightSource === "depth") ? "hybrid" : priced.some((book) => book.weightSource === "inverse_spread") ? "inverse_spread" : "equal";
 
-  const observedAt = Date.now();
   const value = {
     asset: symbol,
     snapshotId: makeSnapshotId("sent", [symbol, ...priced.map((book) => book.market.pool)], observedAt),
@@ -59,7 +73,7 @@ export async function getAssetSentiment(asset, options = {}) {
       spread: book.spread,
       weight: Math.round(book.weight * 1000) / 1000,
       weightSource: book.weightSource,
-      secondsToExpiry: book.market.secondsToExpiry,
+      secondsToExpiry: book.market.expiry - Math.floor(observedAt / 1000),
       expiry: book.market.expiry,
     })),
   };
@@ -71,7 +85,8 @@ export async function getAssetSentiment(asset, options = {}) {
 }
 
 export async function listAssets() {
-  const markets = await discoverLiveMarkets();
+  const { discoverLiveMarkets } = await resolveDependencies({});
+  const markets = liveMarketsAt(await discoverLiveMarkets());
   return { assets: [...new Set(markets.map((market) => market.asset))], totalLiveMarkets: markets.length };
 }
 
