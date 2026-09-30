@@ -26,3 +26,8 @@ test("alignment refuses stale forward fill", () => {
   const rows = alignCandles(a, b, { bucketSec: 300, maxCarryBuckets: 1 });
   assert.equal(rows.length, 2);
 });
+
+ test("bucket collapse retains latest observation regardless of input order", () => {
+  const rows=alignCandles([{timestamp:290,close:110},{timestamp:200,close:100}], [{timestamp:0,close:200}], {bucketSec:300});
+  assert.equal(rows[0].a.close,110);
+ });

@@ -12,3 +12,7 @@ test("logReturns computes log price changes", () => {
   assert.ok(Math.abs(out[0].return - Math.log(1.1)) < 1e-12);
   assert.ok(Math.abs(out[1].return - Math.log(0.9)) < 1e-12);
 });
+
+ test("return touching a carried starting candle is marked filled", () => {
+  assert.equal(logReturns([{timestamp:0,close:100,source:"filled"},{timestamp:300,close:110,source:"real"}])[0].source,"filled");
+ });

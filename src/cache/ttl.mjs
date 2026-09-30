@@ -7,15 +7,15 @@ export class TtlCache {
   get(key, now = Date.now()) {
     const entry = this.entries.get(key);
     if (!entry) return null;
-    if (now - entry.at >= this.ttlMs) {
+    if (now >= entry.expiresAt) {
       this.entries.delete(key);
       return null;
     }
     return entry;
   }
 
-  set(key, value, now = Date.now()) {
-    const entry = { at: now, expiresAt: now + this.ttlMs, value };
+  set(key, value, now = Date.now(), validUntil = Infinity) {
+    const entry = { at: now, expiresAt: Math.min(now + this.ttlMs, validUntil), value };
     this.entries.set(key, entry);
     return entry;
   }

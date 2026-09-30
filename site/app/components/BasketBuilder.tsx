@@ -32,6 +32,7 @@ type ResultLeg = {
   secondsToExpiry?: number | null;
 };
 type Result = {
+  live?: boolean;
   status: string;
   snapshot?: { correlationSnapshotId?: string | null; correlationObservedAt?: number | null; pricedAt?: number | null };
   legs?: ResultLeg[];
@@ -93,7 +94,7 @@ export default function BasketBuilder() {
     const controller = new AbortController();
     (async () => {
       try {
-        const response = await fetch(`${root}/api/assets`, { signal: controller.signal });
+        const response = await fetch(`${root}/api/assets`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data: { assets?: unknown[] } = await response.json();
         const discovered = Array.isArray(data.assets)
@@ -102,7 +103,7 @@ export default function BasketBuilder() {
         if (discovered.length < 2) throw new Error("fewer than two live assets");
 
         const snapshots = await Promise.all(discovered.slice(0, 8).map(async (asset) => {
-          const marketResponse = await fetch(`${root}/api/market/${encodeURIComponent(asset)}`, { signal: controller.signal });
+          const marketResponse = await fetch(`${root}/api/market/${encodeURIComponent(asset)}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
           if (!marketResponse.ok) throw new Error(`${asset} HTTP ${marketResponse.status}`);
           return marketResponse.json() as Promise<MarketSnapshot>;
         }));
@@ -151,7 +152,7 @@ export default function BasketBuilder() {
     fetch(`${base.replace(/\/$/, "")}/api/basket/price`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]),
       body: JSON.stringify({
         legs: [
           { asset: assetA, direction: a, intervalMin: windowMin },
@@ -162,7 +163,7 @@ export default function BasketBuilder() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data: Result = await response.json();
       setResult(data);
-      setMode("live");
+      setMode(data.live === false ? "demo" : "live");
     }).catch(() => {
       if (!controller.signal.aborted) {
         setResult(demoForDirections(a, b));
@@ -181,7 +182,7 @@ export default function BasketBuilder() {
   return (
     <div className="basket-shell basket-pro">
       <div className="basket-toolbar">
-        <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? `Live DreamDEX · ${assets.length} assets` : mode === "loading" ? "Refreshing live quote…" : "Deterministic demo fallback"}</div>
+        <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? `DreamDEX API · ${assets.length} assets` : mode === "loading" ? "Refreshing live quote…" : "Synthetic demo preview · no live quote"}</div>
         <div className="matched-pill">Matched horizon · {windowMin || "—"}m</div>
       </div>
 
@@ -234,7 +235,7 @@ export default function BasketBuilder() {
 
             <div className="confidence-card">
               <div className="relationship-head"><span>Data confidence</span><strong className="capitalize">{result.confidence || result.correlation?.confidence || "—"}</strong></div>
-              <div className="confidence-line"><b>{confidenceScore == null ? "—" : `${Math.round(confidenceScore * 100)}%`}</b><span>pricing reliability</span></div>
+              <div className="confidence-line"><b>{confidenceScore == null ? "—" : `${Math.round(confidenceScore * 100)}%`}</b><span>model weight · not a success probability</span></div>
               <div className="confidence-track"><i style={{ width: `${Math.round((confidenceScore || 0) * 100)}%` }} /></div>
               <div className="confidence-meta"><span>{result.samples ?? result.correlation?.samples ?? "—"} samples</span><span>{coverageLabel(result.correlation?.coverage)}</span><span>{estimatorLabel(result.estimator || result.correlation?.estimator)}</span></div>
             </div>

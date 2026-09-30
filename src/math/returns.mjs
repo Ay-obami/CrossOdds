@@ -4,7 +4,7 @@ export function logReturns(candles) {
     const previous = Number(candles[i - 1].close);
     const current = Number(candles[i].close);
     if (!(previous > 0) || !(current > 0)) continue;
-    out.push({ timestamp: candles[i].timestamp, return: Math.log(current / previous), source: candles[i].source || "real" });
+    out.push({ timestamp: candles[i].timestamp, return: Math.log(current / previous), source: candles[i].source === "filled" || candles[i - 1].source === "filled" ? "filled" : "real" });
   }
   return out;
 }

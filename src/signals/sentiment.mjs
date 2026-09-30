@@ -28,7 +28,8 @@ export async function getAssetSentiment(asset, options = {}) {
     const cached = sentimentCache.get(symbol, now());
     if (cached) {
       const windows = liveMarketsAt(cached.value.windows, Math.floor(now() / 1000));
-      if (windows.length === cached.value.windows.length) {
+      const sourceExpired = windows.some(window => window.freshness?.sourceTimestamp != null && now() - window.freshness.sourceTimestamp > 60_000);
+      if (windows.length === cached.value.windows.length && !sourceExpired) {
         return { ...cached.value, windows, cache: { hit: true, cachedAt: cached.at, expiresAt: cached.expiresAt } };
       }
       sentimentCache.clear(symbol);
@@ -43,7 +44,7 @@ export async function getAssetSentiment(asset, options = {}) {
   const livePools = new Set(liveMarketsAt(markets, Math.floor(observedAt / 1000)).map((market) => market.pool));
   const priced = books
     .map((book, index) => ({ ...book, market: markets[index], ...marketWeight(book) }))
-    .filter((book) => livePools.has(book.market.pool) && Number.isFinite(book.impliedProbability));
+    .filter((book) => livePools.has(book.market.pool) && (book.validUntil == null || book.validUntil > observedAt) && Number.isFinite(book.impliedProbability));
 
   if (!priced.length) return { asset: symbol, markets: markets.length, sentiment: null, note: "no priced order books yet" };
 
@@ -57,6 +58,8 @@ export async function getAssetSentiment(asset, options = {}) {
     asset: symbol,
     snapshotId: makeSnapshotId("sent", [symbol, ...priced.map((book) => book.market.pool)], observedAt),
     observedAt,
+    validUntil: Math.min(...priced.map(book => book.validUntil ?? Infinity), ...priced.map(book => book.market.expiry * 1000)),
+    freshness: { status: priced.every(book => book.freshness?.status === "fresh") ? "fresh" : "unknown", source: "rpc_block", sourceTimestamp: priced.every(book => Number.isFinite(book.freshness?.sourceTimestamp)) ? Math.min(...priced.map(book => book.freshness.sourceTimestamp)) : null, retrievedAt: observedAt },
     markets: markets.length,
     pricedMarkets: priced.length,
     probability: weighted,
@@ -65,6 +68,7 @@ export async function getAssetSentiment(asset, options = {}) {
     weighting,
     windows: priced.map((book) => ({
       pool: book.market.pool,
+      freshness: book.freshness || { status: "unknown" },
       intervalMin: book.market.intervalSec / 60,
       intervalSec: book.market.intervalSec,
       impliedProbabilityRaw: book.impliedProbability,
@@ -78,7 +82,7 @@ export async function getAssetSentiment(asset, options = {}) {
     })),
   };
   if (!options.disableCache) {
-    const entry = sentimentCache.set(symbol, value, observedAt);
+    const entry = sentimentCache.set(symbol, value, observedAt, value.validUntil);
     return { ...value, cache: { hit: false, cachedAt: entry.at, expiresAt: entry.expiresAt } };
   }
   return value;

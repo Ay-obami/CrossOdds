@@ -26,7 +26,7 @@ export const COLLATERAL = SOMNIA_TESTNET_ADDRESSES.testUsdc;
 
 export const pub = createPublicClient({
   chain: somniaTestnet,
-  transport: http(RPC_URL || undefined),
+  transport: http(RPC_URL || undefined, { timeout: 10_000, retryCount: 0 }),
 });
 
 export const ex = new SomniaMarkets({
