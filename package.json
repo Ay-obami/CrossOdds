@@ -16,7 +16,8 @@
     "api": "node src/api/http.mjs",
     "inspect:markets": "node scripts/inspect-markets.mjs",
     "test:api:live": "node scripts/test-api-live.mjs",
-    "smoke:production": "node scripts/smoke-production.mjs"
+    "smoke:production": "node scripts/smoke-production.mjs",
+    "test:demo": "node scripts/test-demo.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

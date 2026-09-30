@@ -37,6 +37,7 @@ export async function getCandles({ pool, interval = "15m", limit = 500, indexerU
 
   const response = await fetchImpl(indexerUrl, {
     method: "POST",
+    signal: AbortSignal.timeout(10_000),
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       query: CANDLES_QUERY,

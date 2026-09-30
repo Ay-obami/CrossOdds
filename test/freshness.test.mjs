@@ -75,3 +75,17 @@ test("basket cannot revive an expired window through aggregate sentiment", async
   assert.equal(result.status, "insufficient_data");
   assert.equal(result.independentProbability, undefined);
 });
+test('cached quote is invalidated by an included order expiry inside cache TTL',async()=>{
+ clearSentimentCache();let clock=1_700_000_000_000;let reads=0;
+ const original=clock;
+ const options={now:()=>clock,
+ discoverLiveMarkets:async()=>[{asset:'BTC',pool:'pool',intervalSec:900,expiry:original/1000+100}],
+ readBook:async()=>{reads++;return {pool:'pool',impliedProbability:reads===1?0.5:0.6,depth:10,validUntil:reads===1?original+1000:original+100000};}
+ };
+ const first=await getAssetSentiment('BTC',options);
+ assert.equal(first.cache.expiresAt,original+1000);
+ clock+=1000;
+ const second=await getAssetSentiment('BTC',options);
+ assert.equal(second.cache.hit,false);assert.equal(second.probability,0.6);assert.equal(reads,2);
+ assert.equal(first.observedAt,original);
+});

@@ -7,8 +7,8 @@ function collapseIntoBuckets(candles, bucketSec) {
   for (const candle of candles) {
     const bucket = bucketOf(candle.timestamp, bucketSec);
     const existing = buckets.get(bucket);
-    if (!existing || candle.timestamp >= existing.timestamp) {
-      buckets.set(bucket, { ...candle, timestamp: bucket, source: "real" });
+    if (!existing || Number(candle.timestamp) >= existing.observationTimestamp) {
+      buckets.set(bucket, { ...candle, timestamp: bucket, observationTimestamp: Number(candle.timestamp), source: "real" });
     }
   }
   return buckets;

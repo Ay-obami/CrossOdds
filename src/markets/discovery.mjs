@@ -20,13 +20,21 @@ export async function discoverLiveMarkets() {
 
   for (let i = 0; i < 40; i++) {
     const toBlock = head - BigInt(i * 1000);
-    const fromBlock = toBlock - 999n;
+    if (toBlock < 0n) break;
+    const fromBlock = toBlock > 999n ? toBlock - 999n : 0n;
     try {
       const logs = await pub.getLogs({ event: marketCreated, fromBlock, toBlock });
       found.push(...logs.map((log) => log.args));
     } catch (error) {
       failures.push({ fromBlock: fromBlock.toString(), toBlock: toBlock.toString(), message: error?.message || String(error) });
+      break; // An incomplete scan cannot be used; avoid 40 serial outage retries.
     }
+  }
+
+  if (failures.length) {
+    const error = new Error("DreamDEX discovery incomplete: one or more scanned block ranges failed");
+    error.failures = failures;
+    throw error;
   }
 
   const eligible = found

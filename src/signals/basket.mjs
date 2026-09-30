@@ -70,6 +70,8 @@ export async function priceBasket({ legs }, deps = {}) {
   ]);
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const unusableSource = [sentimentA, sentimentB].some(sentiment => (sentiment.validUntil != null && sentiment.validUntil <= Date.now()) || sentiment.freshness && (sentiment.freshness.status !== "fresh" || (sentiment.freshness.sourceTimestamp != null && Date.now() - sentiment.freshness.sourceTimestamp > 60_000)));
+  if (unusableSource) return { status: "insufficient_data", note: "Order book source freshness is unknown or stale; basket price withheld", legs, sentimentA, sentimentB, correlation };
   const windowA = selectWindow(sentimentA, correlation, "A", preferredMarketWindowMin, nowSec);
   const windowB = selectWindow(sentimentB, correlation, "B", preferredMarketWindowMin, nowSec);
   // An explicit event window is a contract with the caller, not a preference.
@@ -106,10 +108,13 @@ export async function priceBasket({ legs }, deps = {}) {
     [correlation.marketPoolA, marginalA.window?.pool],
     [correlation.marketPoolB, marginalB.window?.pool],
   ].some(([correlationPool, pricedPool]) => correlationPool && pricedPool && correlationPool.toLowerCase() !== pricedPool.toLowerCase());
-  if (correlation.status !== "ok" || correlation.correlation === null || correlationWindowMismatch || correlationPoolMismatch) {
+  const unknownFreshness = correlation.freshness && correlation.freshness.status !== "fresh";
+  if (unknownFreshness || correlation.status !== "ok" || correlation.correlation === null || correlationWindowMismatch || correlationPoolMismatch) {
     return {
       status: "independence_only",
-      note: correlationWindowMismatch
+      note: unknownFreshness
+        ? "Indexer synchronization is unverified; historical correlation adjustment withheld"
+        : correlationWindowMismatch
         ? "Requested market prices are usable, but correlation does not cover the requested event window"
         : correlationPoolMismatch
           ? "Market prices are usable, but correlation was measured from a different market pool"

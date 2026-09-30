@@ -7,7 +7,7 @@ function finiteNumber(value) {
 function orderQuantity(order) {
   // SDK/order shapes have changed across DreamDEX releases. Prefer quantity,
   // but accept the common aliases rather than turning one unknown field into NaN.
-  for (const key of ["quantity", "remainingQuantity", "size", "amount", "baseAmount"]) {
+  for (const key of ["quantityRemaining", "quantity", "remainingQuantity", "size", "amount", "baseAmount"]) {
     const value = finiteNumber(order?.[key]);
     if (value !== null && value >= 0) return value;
   }

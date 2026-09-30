@@ -70,7 +70,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 404, { error: "not found" });
   } catch (error) {
     console.error("[api]", error);
-    return json(res, 500, { error: "crossodds request failed", detail: process.env.NODE_ENV === "production" ? undefined : error.message });
+    return json(res, 503, { status: "unavailable", error: "crossodds upstream request failed", detail: process.env.NODE_ENV === "production" ? undefined : error.message });
   }
 });
 

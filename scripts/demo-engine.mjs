@@ -28,7 +28,7 @@ const correlationDeps = { disableCache: true, discoverLiveMarkets: async () => m
 const correlation = await calculateAssetCorrelation("BTC", "ETH", correlationDeps);
 const basket = await priceBasket({ legs: [{ asset: "BTC", direction: "UP" }, { asset: "ETH", direction: "UP" }] }, {
   getAssetSentiment: async (asset) => ({ asset, probability: asset === "BTC" ? 0.645 : 0.581 }),
-  calculateAssetCorrelation: async () => correlation,
+  calculateAssetCorrelation: async () => ({ ...correlation, freshness: { status: "fresh", source: "synthetic_fixture" } }),
 });
 
 console.log("=== READOUT CORRELATION ENGINE (DETERMINISTIC DEMO) ===\n");

@@ -15,6 +15,8 @@ type WindowRow = {
 
 type AssetSnapshot = {
   asset: string;
+  live?: boolean;
+  freshness?: { status?: string };
   windows?: WindowRow[];
   sentiment?: number | null;
   weighting?: string;
@@ -43,17 +45,17 @@ export default function MarketExplorer() {
     const controller = new AbortController();
     (async () => {
       try {
-        const assetsResponse = await fetch(`${root}/api/assets`, { signal: controller.signal });
+        const assetsResponse = await fetch(`${root}/api/assets`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
         if (!assetsResponse.ok) throw new Error(`assets HTTP ${assetsResponse.status}`);
         const assetsPayload: { assets?: unknown[] } = await assetsResponse.json();
         const assets = Array.isArray(assetsPayload.assets) ? assetsPayload.assets.map((value) => String(value).toUpperCase()).filter(Boolean) : [];
         if (!assets.length) throw new Error("no live assets");
         const rows = await Promise.all(assets.slice(0, 8).map(async (asset) => {
-          const response = await fetch(`${root}/api/market/${encodeURIComponent(asset)}`, { signal: controller.signal });
+          const response = await fetch(`${root}/api/market/${encodeURIComponent(asset)}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
           if (!response.ok) throw new Error(`${asset} HTTP ${response.status}`);
           return response.json() as Promise<AssetSnapshot>;
         }));
-        if (!controller.signal.aborted) { setSnapshots(rows); setMode("live"); }
+        if (!controller.signal.aborted) { setSnapshots(rows); setMode(rows.some(row => row.live === false) ? "demo" : "live"); }
       } catch {
         if (!controller.signal.aborted) { setSnapshots(recorded); setMode("demo"); }
       }
@@ -70,7 +72,7 @@ export default function MarketExplorer() {
 
   return <>
     <div className="explore-toolbar">
-      <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? "Live DreamDEX Event Contract data" : mode === "loading" ? "Checking live CrossOdds API…" : "Recorded DreamDEX fallback"}</div>
+      <div className="mode-row"><span className={`status-dot ${mode}`} />{mode === "live" ? "DreamDEX quotes · source freshness shown per asset" : mode === "loading" ? "Checking live CrossOdds API…" : "Demo preview · historical example values; API unavailable or unconfigured"}</div>
       <div className="filter-groups">
         <div className="filter-row"><span>Asset</span><button className={assetFilter === "ALL" ? "active" : ""} onClick={() => setAssetFilter("ALL")}>All</button>{assets.map((asset) => <button key={asset} className={assetFilter === asset ? "active" : ""} onClick={() => setAssetFilter(asset)}>{asset}</button>)}</div>
         <div className="filter-row"><span>Window</span><button className={windowFilter === "ALL" ? "active" : ""} onClick={() => setWindowFilter("ALL")}>All</button>{intervals.map((interval) => <button key={interval} className={windowFilter === interval ? "active" : ""} onClick={() => setWindowFilter(interval)}>{formatWindow(interval)}</button>)}</div>
@@ -83,7 +85,7 @@ export default function MarketExplorer() {
       {filtered.map((snapshot) => <section className="asset-market-group" key={snapshot.asset}>
         <div className="asset-group-head">
           <div className="asset-group-title"><div className={`explorer-token ${snapshot.asset.toLowerCase()}`}>{assetGlyph(snapshot.asset)}</div><div><h2>{snapshot.asset} Event Contracts</h2><p>{snapshot.windows?.length || 0} visible prediction windows</p></div></div>
-          <div className="asset-summary-chips"><SummaryChip label="aggregate UP" value={formatProbability(snapshot.sentiment)} /><SummaryChip label="weighting" value={formatWeightSource(snapshot.weighting)} /><SummaryChip label="total depth" value={formatDepth(snapshot.totalDepth)} /><SummaryChip label="freshness" value={formatAge(snapshot.observedAt)} /></div>
+          <div className="asset-summary-chips"><SummaryChip label="aggregate UP" value={formatProbability(snapshot.sentiment)} /><SummaryChip label="weighting" value={formatWeightSource(snapshot.weighting)} /><SummaryChip label="total depth" value={formatDepth(snapshot.totalDepth)} /><SummaryChip label="freshness at retrieval" value={snapshot.freshness?.status || "unknown"} /><SummaryChip label="retrieved" value={formatAge(snapshot.observedAt)} /></div>
         </div>
         <div className="window-grid">{(snapshot.windows || []).map((window) => <WindowCard key={window.pool} asset={snapshot.asset} window={window} />)}</div>
       </section>)}
@@ -116,13 +118,13 @@ function WindowCard({ asset, window }: { asset: string; window: WindowRow }) {
 
 function SummaryChip({ label, value }: { label: string; value: string }) { return <div className="summary-chip"><span>{label}</span><strong>{value}</strong></div>; }
 function Detail({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) { return <div className={`detail-item ${wide ? "wide" : ""}`} title={value}><span>{label}</span><strong>{value}</strong></div>; }
-function finitePercent(value?: number | null) { const number = Number(value); return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : null; }
-function formatProbability(value?: number | null) { return Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : "—"; }
-function formatSpread(value?: number | null) { return Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(2)} pts` : "Unavailable"; }
-function formatDepth(value?: number | null) { const number = Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "Unavailable"; }
+function finitePercent(value?: number | null) { const number = value == null ? NaN : Number(value); return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : null; }
+function formatProbability(value?: number | null) { return value != null && Number.isFinite(Number(value)) ? `${Number(value).toFixed(1)}%` : "—"; }
+function formatSpread(value?: number | null) { return value != null && Number.isFinite(Number(value)) ? `${(Number(value) * 100).toFixed(2)} pts` : "Unavailable"; }
+function formatDepth(value?: number | null) { const number = value == null ? NaN : Number(value); return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "Unavailable"; }
 function formatWeightSource(value?: string) { if (!value) return "—"; const labels: Record<string,string> = { inverse_spread: "Inverse spread", depth: "Depth", hybrid: "Hybrid", equal: "Equal", recorded: "Recorded" }; return labels[value] || value.replaceAll("_", " "); }
-function formatCountdown(value?: number | null) { const seconds = Number(value); if (!Number.isFinite(seconds)) return "—"; if (seconds <= 0) return "now"; if (seconds < 60) return `${Math.ceil(seconds)}s`; if (seconds < 3600) return `${Math.ceil(seconds / 60)}m`; return `${(seconds / 3600).toFixed(1)}h`; }
-function formatExpiry(value?: number | null) { const seconds = Number(value); if (!Number.isFinite(seconds) || seconds <= 0) return "—"; return new Date(seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+function formatCountdown(value?: number | null) { const seconds = value == null ? NaN : Number(value); if (!Number.isFinite(seconds)) return "—"; if (seconds <= 0) return "now"; if (seconds < 60) return `${Math.ceil(seconds)}s`; if (seconds < 3600) return `${Math.ceil(seconds / 60)}m`; return `${(seconds / 3600).toFixed(1)}h`; }
+function formatExpiry(value?: number | null) { const seconds = value == null ? NaN : Number(value); if (!Number.isFinite(seconds) || seconds <= 0) return "—"; return new Date(seconds * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 function shortPool(value: string) { return value?.startsWith("0x") && value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value || "—"; }
 function formatAge(value?: number) { if (!value) return "—"; const seconds = Math.max(0, Math.round((Date.now() - value) / 1000)); return seconds < 2 ? "now" : `${seconds}s ago`; }
 function formatWindow(value: number) { return value >= 60 && value % 60 === 0 ? `${value / 60}h` : `${value}m`; }

@@ -58,7 +58,7 @@ async function evaluatePair(pair, candleInterval, deps) {
   const tradeCountB = candlesB.reduce((sum, candle) => sum + Number(candle.tradeCount || 0), 0);
   let quality = scoreCorrelationQuality({ samples, filledSamples, tradeCountA, tradeCountB, spanSeconds });
   if (estimator === "hayashi_yoshida" && quality.confidence === "high") quality = { ...quality, confidence: "medium", score: Math.min(quality.score, 0.79), reason: "asynchronous estimator capped at medium confidence on sparse event-market data" };
-  return { correlation, estimator, samples, overlapPairs, filledSamples, realSamples: samples - filledSamples, tradeCountA, tradeCountB, spanSeconds, quality, candleInterval, marketWindowMin: pair.a.intervalSec / 60, marketA: pair.a, marketB: pair.b, points };
+  return { latestCandleA: candlesA.at(-1)?.timestamp ?? null, latestCandleB: candlesB.at(-1)?.timestamp ?? null, correlation, estimator, samples, overlapPairs, filledSamples, realSamples: samples - filledSamples, tradeCountA, tradeCountB, spanSeconds, quality, candleInterval, marketWindowMin: pair.a.intervalSec / 60, marketA: pair.a, marketB: pair.b, points };
 }
 
 function resultRank(result) {
@@ -120,6 +120,7 @@ export async function calculateAssetCorrelation(assetA, assetB, deps = {}) {
   const value = {
     assetA: aSymbol, assetB: bSymbol, status: "ok",
     snapshotId, observedAt: computedAt,
+    freshness: { status: "unknown", source: "indexer", reason: "Candle API supplies bucket times but no verified indexer synchronization watermark", latestCandleA: best.latestCandleA, latestCandleB: best.latestCandleB, retrievedAt: computedAt },
     correlation: Math.round(best.correlation * 1000) / 1000,
     estimator: best.estimator,
     interval: best.candleInterval, marketWindowMin: best.marketWindowMin,
