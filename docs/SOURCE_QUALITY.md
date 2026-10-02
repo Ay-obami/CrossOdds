@@ -1,15 +1,7 @@
-# CrossOdds remaining audit: source quality and reproducible demo
+# Source quality and verification
 
-Scope: order book pagination/freshness, indexer source uncertainty, timestamp
-alignment, outage presentation, and offline demonstration. No trades or deployment.
-
-Completed sequence:
-1. Reproduce timestamp collapse and carried-return quality regressions with tests.
-2. Inspect locked SDK 0.28.1 primary source, then reproduce page/freshness failures.
-3. Pin both sides and every page to one RPC block; bound reads and fail closed.
-4. Separate retrieval time from source age and unverified indexer synchronization.
-5. Reproduce broken explicit-window demo pricing and provide an offline HTTP smoke.
-6. Run engine suite, demo smoke, synthetic engine replay, and production site build.
+This document describes current data-source policies, reproducible offline checks,
+and the limits of the resulting estimates.
 
 ## Primary source evidence
 
@@ -75,4 +67,4 @@ live indexer availability or trading performance.
 On 2026-09-30, an unauthenticated POST of `query { __typename }` to the
 configured test indexer returned HTTP 200 with query_root. This establishes
 endpoint reachability only, not recent trades, market correctness or indexer
-synchronization. Live RPC/books were not exercised by this audit.
+synchronization. Live RPC/books were not exercised by these checks.

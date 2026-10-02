@@ -23,7 +23,7 @@ are illustrative synthetic fixtures, not recorded trading evidence.
 The generated-candle `npm run demo` separately exercises the actual correlation
 engine using deterministic returns. Its synthetic source override is isolated to
 the demo script. Live baskets with unverified indexer synchronization withhold the
-correlation adjustment. See [source policy and limits](docs/remaining-audit-plan.md).
+correlation adjustment. See [source policy and limits](docs/SOURCE_QUALITY.md).
 
 ## Two-minute walkthrough
 
